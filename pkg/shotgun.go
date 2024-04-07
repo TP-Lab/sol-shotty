@@ -1,7 +1,8 @@
 package pkg
 
 import (
-	"encoding/json"
+	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -15,33 +16,33 @@ type SuccessResponse struct {
 }
 
 func Shotgun(endpoints []string, mainRequest *http.Request) (SuccessResponse, error) {
-	successCh := make(chan SuccessResponse)
-
-	defer close(successCh)
-
-	for _, endpoint := range endpoints {
-		go makeRequest(endpoint, mainRequest, successCh)
+	resultCh := make(chan SuccessResponse, len(endpoints))
+	reqBody, err := io.ReadAll(mainRequest.Body)
+	if err != nil {
+		return <-resultCh, err
 	}
-
-	return <-successCh, nil
+	fmt.Printf("Shotgun %v\n", string(reqBody))
+	for _, endpoint := range endpoints {
+		go makeRequest(endpoint, mainRequest, reqBody, resultCh)
+	}
+	return <-resultCh, nil
 }
 
-func makeRequest(endpoint string, req *http.Request, successCh chan SuccessResponse) {
+func makeRequest(endpoint string, req *http.Request, reqBodyBytes []byte, successCh chan SuccessResponse) {
 	// Create a new request with the same method and body as the original request
-	newReq, err := http.NewRequest(req.Method, endpoint, req.Body)
+	newReq, err := http.NewRequest(req.Method, endpoint, bytes.NewReader(reqBodyBytes))
 	if err != nil {
 		return
 	}
-
 	// Copy headers from the original request to the new request
 	newReq.Header = make(http.Header)
 	for key, values := range req.Header {
 		newReq.Header[key] = values
 	}
-
+	//newReq.Header["Content-Type"] = []string{"application/json"}
 	// Send request
 	client := &http.Client{
-		Timeout: 30 * time.Second, //TODO: Make this configurable
+		Timeout: 150 * time.Millisecond,
 	}
 
 	startTime := time.Now()
@@ -54,31 +55,16 @@ func makeRequest(endpoint string, req *http.Request, successCh chan SuccessRespo
 
 	defer resp.Body.Close()
 
-	// Check for a successful response (status code 2xx)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return
 		}
-
-		var jsonData map[string]interface{}
-		err = json.Unmarshal(body, &jsonData)
-		if err != nil {
-			return
-		}
-
-		// Reject responses with an "error" key
-		if _, ok := jsonData["error"]; ok {
-			return
-		}
-
 		successCh <- SuccessResponse{
 			Result:   resp,
 			Endpoint: endpoint,
 			RTT:      int(endTime.Sub(startTime).Milliseconds()),
 			Body:     body,
 		}
-
-		return
 	}
 }

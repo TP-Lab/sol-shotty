@@ -8,17 +8,11 @@ import (
 	"github.com/trustless-engineering/sol-shotty/pkg/utils"
 )
 
+var endpointList []string
+
 func proxy(w http.ResponseWriter, req *http.Request) {
-	endpoints, err := utils.LoadEndpoints()
-
-	if err != nil {
-		fmt.Printf("Error loading endpoints: %v\n", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
 	// Shotgun the request to all endpoints
-	response, err := pkg.Shotgun(endpoints, req)
+	response, err := pkg.Shotgun(endpointList, req)
 	if err != nil {
 		fmt.Printf("Error shotgunning request: %v\n", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
@@ -54,7 +48,13 @@ func proxy(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	fmt.Printf("Loading the shotty...\n")
+	if endpoints, err := utils.LoadEndpoints(); err != nil {
+		fmt.Printf("Error loading endpoints: %v\n", err)
+		return
+	} else {
+		endpointList = endpoints
+	}
 	http.HandleFunc("/", proxy)
 	fmt.Printf("Shotty is ready to fire! Listening at http://127.0.0.1:420\n")
-	http.ListenAndServe(":420", nil)
+	http.ListenAndServe("172.28.143.6:420", nil)
 }
