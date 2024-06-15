@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+var client = &http.Client{
+	Timeout: 150 * time.Millisecond,
+}
+
 type SuccessResponse struct {
 	Result   *http.Response `json:"result"`
 	Endpoint string         `json:"endpoint"`
@@ -41,10 +45,6 @@ func makeRequest(endpoint string, req *http.Request, reqBodyBytes []byte, succes
 	}
 	//newReq.Header["Content-Type"] = []string{"application/json"}
 	// Send request
-	client := &http.Client{
-		Timeout: 150 * time.Millisecond,
-	}
-
 	startTime := time.Now()
 	resp, err := client.Do(newReq)
 	endTime := time.Now()
